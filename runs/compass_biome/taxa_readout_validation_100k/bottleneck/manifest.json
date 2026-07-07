@@ -1,0 +1,39 @@
+{
+  "batch_size": 1024,
+  "controls": "all",
+  "dataset_dir": "runs/compass_biome/taxa_readout_validation_100k/dataset",
+  "device": "cuda",
+  "embedding_width": 256,
+  "embeddings_path": "runs/compass_biome/taxa_readout_validation_100k/embeddings/embeddings.npz",
+  "epochs": 100,
+  "epochs_ran": 76,
+  "final_loss": 4.249457836151123,
+  "learning_rate": 0.02,
+  "num_programs": 32,
+  "num_samples": 99924,
+  "num_taxa": 1000,
+  "outputs": {
+    "biome_enrichment": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/biome_enrichment.csv",
+    "bottleneck_outputs": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/bottleneck_outputs.npz",
+    "example_true_vs_reconstructed_taxa": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/example_true_vs_reconstructed_taxa.png",
+    "mean_baseline_outputs": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/mean_baseline_outputs.npz",
+    "metrics": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/metrics.csv",
+    "metrics_comparison": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/metrics_comparison.png",
+    "program_diagnostics": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/program_diagnostics.csv",
+    "program_usage_heatmap": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/program_usage_heatmap.png",
+    "reconstruction_metrics": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/reconstruction_metrics.csv",
+    "shuffle_bottleneck_outputs": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/shuffle_bottleneck_outputs.npz",
+    "shuffle_training_metrics": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/shuffle_training_metrics.csv",
+    "top_taxa": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/top_taxa.csv",
+    "top_taxa_per_program": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/top_taxa_per_program.csv",
+    "top_taxa_per_program_plot": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/top_taxa_per_program.png",
+    "training_metrics": "runs/compass_biome/taxa_readout_validation_100k/bottleneck/training_metrics.csv"
+  },
+  "patience": 15,
+  "seed": 0,
+  "split_counts": {
+    "test": 9988,
+    "train": 79948,
+    "valid": 9988
+  }
+}

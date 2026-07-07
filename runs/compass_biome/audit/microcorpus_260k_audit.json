@@ -1,0 +1,879 @@
+{
+  "abundance_conclusion": {
+    "can_provide_X_NG": "yes",
+    "reason": "Unnormalized .data is sparse sample x genus relative abundance with fixed taxa columns.",
+    "recommended_target": "MicroCorpus-260K_unnorm.pkl.data"
+  },
+  "corpora": {
+    "normalized": {
+      "alignment": {
+        "duplicate_corpus_sample_ids": [],
+        "duplicate_metadata_sample_ids": [],
+        "num_corpus_samples": 263302,
+        "num_matched_samples": 263302,
+        "num_metadata_rows": 263302,
+        "num_unmatched_in_corpus": 0,
+        "num_unmatched_in_metadata": 0,
+        "ordering_matches": true
+      },
+      "attributes": [
+        "data",
+        "max_len",
+        "phylogeny",
+        "tokenizer",
+        "tokens",
+        "zero_values"
+      ],
+      "data": {
+        "columns_first20": [
+          "g__Abarenicola",
+          "g__Abedinium",
+          "g__Abeoforma",
+          "g__Aberranta",
+          "g__Abies",
+          "g__Abiotrophia",
+          "g__Ablabesmyia",
+          "g__Abolboda",
+          "g__Abollifer",
+          "g__Abraliopsis",
+          "g__Absidia",
+          "g__Abyssicoccus",
+          "g__Abyssivirga",
+          "g__Acanthamoeba",
+          "g__Acanthephyra",
+          "g__Acanthiella",
+          "g__Acanthobdella",
+          "g__Acanthobothrium",
+          "g__Acanthocephalus",
+          "g__Acanthoceras"
+        ],
+        "columns_unique": true,
+        "dtypes": {
+          "float32": 9665
+        },
+        "index_first10": [
+          "SRR1005680",
+          "SRR1005700",
+          "SRR1005674",
+          "SRR1005675",
+          "SRR1005676",
+          "SRR1005677",
+          "SRR1005697",
+          "SRR1005678",
+          "SRR1005698",
+          "SRR1005679"
+        ],
+        "index_unique": true,
+        "nonzero_first10": [
+          9662,
+          9662,
+          9662,
+          9662,
+          9662,
+          9662,
+          9662,
+          9662,
+          9662,
+          9662
+        ],
+        "orientation": "sample_x_taxa",
+        "row_sum_first10": [
+          -118.36827850341797,
+          -109.90411376953125,
+          -106.422119140625,
+          -59.21540451049805,
+          -122.14067077636719,
+          -81.57756042480469,
+          -72.61687469482422,
+          -115.17833709716797,
+          -99.97892761230469,
+          -114.69464874267578
+        ],
+        "sample_block_max": 41.760406494140625,
+        "sample_block_mean": -0.011366038583219051,
+        "sample_block_min": -0.43371903896331787,
+        "sample_block_shape": [
+          100,
+          1000
+        ],
+        "sample_block_zero_fraction": 0.001,
+        "shape": [
+          263302,
+          9665
+        ],
+        "type": "pandas.DataFrame"
+      },
+      "has_data": true,
+      "item0_keys": [
+        "input_ids",
+        "attention_mask"
+      ],
+      "item0_shapes": {
+        "attention_mask": [
+          512
+        ],
+        "input_ids": [
+          512
+        ]
+      },
+      "item0_type": "builtins.dict",
+      "len": 263302,
+      "load_seconds": 9.902,
+      "loadable": true,
+      "object_type": "mgm.src.MicroCorpus.MicroCorpus",
+      "path": "/home/sunyirong/shared/sunyirong/MicroCorpus-260K/MicroCorpus-260K.pkl",
+      "tokenizer_type": "mgm.src.MicroCorpus.MicroTokenizer",
+      "tokenizer_vocab_size": 9669,
+      "tokens_shape": [
+        263302,
+        512
+      ]
+    },
+    "unnormalized": {
+      "alignment": {
+        "duplicate_corpus_sample_ids": [],
+        "duplicate_metadata_sample_ids": [],
+        "num_corpus_samples": 263302,
+        "num_matched_samples": 263302,
+        "num_metadata_rows": 263302,
+        "num_unmatched_in_corpus": 0,
+        "num_unmatched_in_metadata": 0,
+        "ordering_matches": true
+      },
+      "attributes": [
+        "data",
+        "max_len",
+        "phylogeny",
+        "tokenizer",
+        "tokens",
+        "zero_values"
+      ],
+      "data": {
+        "columns_first20": [
+          "g__Abarenicola",
+          "g__Abedinium",
+          "g__Abeoforma",
+          "g__Aberranta",
+          "g__Abies",
+          "g__Abiotrophia",
+          "g__Ablabesmyia",
+          "g__Abolboda",
+          "g__Abollifer",
+          "g__Abraliopsis",
+          "g__Absidia",
+          "g__Abyssicoccus",
+          "g__Abyssivirga",
+          "g__Acanthamoeba",
+          "g__Acanthephyra",
+          "g__Acanthiella",
+          "g__Acanthobdella",
+          "g__Acanthobothrium",
+          "g__Acanthocephalus",
+          "g__Acanthoceras"
+        ],
+        "columns_unique": true,
+        "dtypes": {
+          "float32": 9665
+        },
+        "index_first10": [
+          "SRR1005680",
+          "SRR1005700",
+          "SRR1005674",
+          "SRR1005675",
+          "SRR1005676",
+          "SRR1005677",
+          "SRR1005697",
+          "SRR1005678",
+          "SRR1005698",
+          "SRR1005679"
+        ],
+        "index_unique": true,
+        "nonzero_first10": [
+          15,
+          23,
+          23,
+          23,
+          24,
+          29,
+          21,
+          16,
+          37,
+          18
+        ],
+        "orientation": "sample_x_taxa",
+        "row_sum_first10": [
+          1.0,
+          1.0,
+          0.9999999403953552,
+          1.0,
+          1.0,
+          1.0,
+          0.9999999403953552,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "sample_block_max": 0.8246268630027771,
+        "sample_block_mean": 7.168936281232163e-05,
+        "sample_block_min": 0.0,
+        "sample_block_shape": [
+          100,
+          1000
+        ],
+        "sample_block_zero_fraction": 0.99769,
+        "shape": [
+          263302,
+          9665
+        ],
+        "type": "pandas.DataFrame"
+      },
+      "has_data": true,
+      "item0_keys": [
+        "input_ids",
+        "attention_mask"
+      ],
+      "item0_shapes": {
+        "attention_mask": [
+          512
+        ],
+        "input_ids": [
+          512
+        ]
+      },
+      "item0_type": "builtins.dict",
+      "len": 263302,
+      "load_seconds": 7.734,
+      "loadable": true,
+      "object_type": "mgm.src.MicroCorpus.MicroCorpus",
+      "path": "/home/sunyirong/shared/sunyirong/MicroCorpus-260K/MicroCorpus-260K_unnorm.pkl",
+      "tokenizer_type": "mgm.src.MicroCorpus.MicroTokenizer",
+      "tokenizer_vocab_size": 9669,
+      "tokens_shape": [
+        263302,
+        512
+      ]
+    }
+  },
+  "cross_corpus_alignment": {
+    "normalized_and_unnormalized_shapes": [
+      [
+        263302,
+        9665
+      ],
+      [
+        263302,
+        9665
+      ]
+    ],
+    "sample_ids_match_metadata": true
+  },
+  "data_root": "/home/sunyirong/shared/sunyirong/MicroCorpus-260K",
+  "file_inventory": [
+    {
+      "file_type": "pickle",
+      "path": "/home/sunyirong/shared/sunyirong/MicroCorpus-260K/MicroCorpus-260K.pkl",
+      "size_bytes": 11261917297
+    },
+    {
+      "file_type": "pickle",
+      "path": "/home/sunyirong/shared/sunyirong/MicroCorpus-260K/MicroCorpus-260K_unnorm.pkl",
+      "size_bytes": 11261917297
+    },
+    {
+      "file_type": "csv",
+      "path": "/home/sunyirong/shared/sunyirong/MicroCorpus-260K/mgnify_biomes.csv",
+      "size_bytes": 13929875
+    }
+  ],
+  "metadata": {
+    "columns": [
+      {
+        "dtype": "object",
+        "examples": [
+          "SRR1005680",
+          "SRR1005700",
+          "SRR1005674",
+          "SRR1005675",
+          "SRR1005676",
+          "SRR1005677",
+          "SRR1005697",
+          "SRR1005678"
+        ],
+        "name": "sample_id",
+        "non_null": 263302,
+        "top_values": [
+          {
+            "count": 1,
+            "value": "SRR1005680"
+          },
+          {
+            "count": 1,
+            "value": "SRR644846"
+          },
+          {
+            "count": 1,
+            "value": "SRR1047163"
+          },
+          {
+            "count": 1,
+            "value": "SRR1046989"
+          },
+          {
+            "count": 1,
+            "value": "SRR1046971"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005674"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005675"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005676"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005677"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005697"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005678"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005698"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005679"
+          },
+          {
+            "count": 1,
+            "value": "SRR1005699"
+          },
+          {
+            "count": 1,
+            "value": "SRR1047140"
+          },
+          {
+            "count": 1,
+            "value": "SRR1047190"
+          },
+          {
+            "count": 1,
+            "value": "SRR1047200"
+          },
+          {
+            "count": 1,
+            "value": "SRR1047210"
+          },
+          {
+            "count": 1,
+            "value": "SRR1046981"
+          },
+          {
+            "count": 1,
+            "value": "SRR1047113"
+          }
+        ],
+        "unique": 263302
+      },
+      {
+        "dtype": "object",
+        "examples": [
+          "Host-associated",
+          "Host-associated",
+          "Host-associated",
+          "Host-associated",
+          "Host-associated",
+          "Host-associated",
+          "Host-associated",
+          "Host-associated"
+        ],
+        "name": "biome_1",
+        "non_null": 263300,
+        "top_values": [
+          {
+            "count": 166521,
+            "value": "Host-associated"
+          },
+          {
+            "count": 72961,
+            "value": "Environmental"
+          },
+          {
+            "count": 18236,
+            "value": "Mixed"
+          },
+          {
+            "count": 5582,
+            "value": "Engineered"
+          },
+          {
+            "count": 2,
+            "value": "<NA>"
+          }
+        ],
+        "unique": 4
+      },
+      {
+        "dtype": "object",
+        "examples": [
+          "Human",
+          "Human",
+          "Human",
+          "Human",
+          "Human",
+          "Human",
+          "Human",
+          "Human"
+        ],
+        "name": "biome_2",
+        "non_null": 243888,
+        "top_values": [
+          {
+            "count": 106038,
+            "value": "Human"
+          },
+          {
+            "count": 54451,
+            "value": "Aquatic"
+          },
+          {
+            "count": 33539,
+            "value": "Mammals"
+          },
+          {
+            "count": 19414,
+            "value": "<NA>"
+          },
+          {
+            "count": 18458,
+            "value": "Terrestrial"
+          },
+          {
+            "count": 12331,
+            "value": "Plants"
+          },
+          {
+            "count": 5620,
+            "value": "Birds"
+          },
+          {
+            "count": 2525,
+            "value": "Animal"
+          },
+          {
+            "count": 1625,
+            "value": "Wastewater"
+          },
+          {
+            "count": 1605,
+            "value": "Insecta"
+          },
+          {
+            "count": 1451,
+            "value": "Fish"
+          },
+          {
+            "count": 1350,
+            "value": "Food production"
+          },
+          {
+            "count": 1050,
+            "value": "Bioreactor"
+          },
+          {
+            "count": 679,
+            "value": "Porifera"
+          },
+          {
+            "count": 548,
+            "value": "Algae"
+          },
+          {
+            "count": 475,
+            "value": "Built environment"
+          },
+          {
+            "count": 334,
+            "value": "Mollusca"
+          },
+          {
+            "count": 327,
+            "value": "Arthropoda"
+          },
+          {
+            "count": 298,
+            "value": "Lab enrichment"
+          },
+          {
+            "count": 277,
+            "value": "Modeled"
+          }
+        ],
+        "unique": 33
+      },
+      {
+        "dtype": "object",
+        "examples": [
+          "Digestive system",
+          "Digestive system",
+          "Digestive system",
+          "Digestive system",
+          "Digestive system",
+          "Digestive system",
+          "Digestive system",
+          "Digestive system"
+        ],
+        "name": "biome_3",
+        "non_null": 221557,
+        "top_values": [
+          {
+            "count": 103977,
+            "value": "Digestive system"
+          },
+          {
+            "count": 43375,
+            "value": "Marine"
+          },
+          {
+            "count": 41745,
+            "value": "<NA>"
+          },
+          {
+            "count": 17984,
+            "value": "Soil"
+          },
+          {
+            "count": 11701,
+            "value": "Respiratory system"
+          },
+          {
+            "count": 9262,
+            "value": "Skin"
+          },
+          {
+            "count": 7553,
+            "value": "Freshwater"
+          },
+          {
+            "count": 7225,
+            "value": "Reproductive system"
+          },
+          {
+            "count": 5481,
+            "value": "Rhizosphere"
+          },
+          {
+            "count": 3699,
+            "value": "Root"
+          },
+          {
+            "count": 3562,
+            "value": "Gastrointestinal tract"
+          },
+          {
+            "count": 900,
+            "value": "Dairy products"
+          },
+          {
+            "count": 786,
+            "value": "Sediment"
+          },
+          {
+            "count": 642,
+            "value": "Phylloplane"
+          },
+          {
+            "count": 638,
+            "value": "Rhizoplane"
+          },
+          {
+            "count": 633,
+            "value": "Thermal springs"
+          },
+          {
+            "count": 532,
+            "value": "Estuary"
+          },
+          {
+            "count": 464,
+            "value": "Water and sludge"
+          },
+          {
+            "count": 444,
+            "value": "Deep subsurface"
+          },
+          {
+            "count": 354,
+            "value": "Industrial wastewater"
+          }
+        ],
+        "unique": 45
+      },
+      {
+        "dtype": "object",
+        "examples": [
+          "Large intestine",
+          "Large intestine",
+          "Large intestine",
+          "Large intestine",
+          "Large intestine",
+          "Large intestine",
+          "Large intestine",
+          "Large intestine"
+        ],
+        "name": "biome_4",
+        "non_null": 139097,
+        "top_values": [
+          {
+            "count": 124205,
+            "value": "<NA>"
+          },
+          {
+            "count": 42389,
+            "value": "Large intestine"
+          },
+          {
+            "count": 19212,
+            "value": "Oral"
+          },
+          {
+            "count": 10359,
+            "value": "Nasopharyngeal"
+          },
+          {
+            "count": 8854,
+            "value": "Fecal"
+          },
+          {
+            "count": 6315,
+            "value": "Vagina"
+          },
+          {
+            "count": 6210,
+            "value": "Oceanic"
+          },
+          {
+            "count": 5524,
+            "value": "Coastal"
+          },
+          {
+            "count": 5243,
+            "value": "Sediment"
+          },
+          {
+            "count": 3853,
+            "value": "Intertidal zone"
+          },
+          {
+            "count": 3227,
+            "value": "Stomach"
+          },
+          {
+            "count": 3094,
+            "value": "Agricultural"
+          },
+          {
+            "count": 2790,
+            "value": "Intestine"
+          },
+          {
+            "count": 2393,
+            "value": "Soil"
+          },
+          {
+            "count": 2172,
+            "value": "Lake"
+          },
+          {
+            "count": 1835,
+            "value": "Wetlands"
+          },
+          {
+            "count": 1715,
+            "value": "Forest soil"
+          },
+          {
+            "count": 1459,
+            "value": "Digestive tube"
+          },
+          {
+            "count": 1320,
+            "value": "Groundwater"
+          },
+          {
+            "count": 1166,
+            "value": "Tropical rainforest"
+          }
+        ],
+        "unique": 68
+      },
+      {
+        "dtype": "object",
+        "examples": [
+          "Fecal",
+          "Fecal",
+          "Fecal",
+          "Fecal",
+          "Fecal",
+          "Fecal",
+          "Fecal",
+          "Fecal"
+        ],
+        "name": "biome_5",
+        "non_null": 69168,
+        "top_values": [
+          {
+            "count": 194134,
+            "value": "<NA>"
+          },
+          {
+            "count": 40256,
+            "value": "Fecal"
+          },
+          {
+            "count": 3250,
+            "value": "Rumen"
+          },
+          {
+            "count": 3120,
+            "value": "Saliva"
+          },
+          {
+            "count": 2763,
+            "value": "Sediment"
+          },
+          {
+            "count": 1962,
+            "value": "tongue dorsum"
+          },
+          {
+            "count": 1890,
+            "value": "Cecum"
+          },
+          {
+            "count": 1767,
+            "value": "Pharynx"
+          },
+          {
+            "count": 1623,
+            "value": "Nasal cavity"
+          },
+          {
+            "count": 1501,
+            "value": "Coral reef"
+          },
+          {
+            "count": 1491,
+            "value": "Bog"
+          },
+          {
+            "count": 1093,
+            "value": "Biofilm"
+          },
+          {
+            "count": 938,
+            "value": "Sigmoid colon"
+          },
+          {
+            "count": 915,
+            "value": "Estuary"
+          },
+          {
+            "count": 793,
+            "value": "Subgingival plaque"
+          },
+          {
+            "count": 772,
+            "value": "Abyssal plane"
+          },
+          {
+            "count": 701,
+            "value": "Salt marsh"
+          },
+          {
+            "count": 575,
+            "value": "Sputum"
+          },
+          {
+            "count": 520,
+            "value": "Throat"
+          },
+          {
+            "count": 513,
+            "value": "Supragingival plaque"
+          }
+        ],
+        "unique": 49
+      }
+    ],
+    "detected_fields": {
+      "biome_hierarchy": true,
+      "country_or_region": false,
+      "disease_or_phenotype": false,
+      "pathway": false,
+      "sample_id_or_accession": true,
+      "sequencing_platform": false,
+      "study_or_cohort": false
+    },
+    "shape": [
+      263302,
+      6
+    ]
+  },
+  "task_suitability": {
+    "MGM teacher embedding extraction": {
+      "reason": "MicroCorpus pickle is loadable.",
+      "support": "yes"
+    },
+    "biome/source classification": {
+      "reason": "MGnify biome hierarchy columns are available.",
+      "support": "yes"
+    },
+    "body-site classification": {
+      "reason": "Body-site-like labels appear only inside biome hierarchy for subsets.",
+      "support": "partial"
+    },
+    "country/geography confounder control": {
+      "reason": "No country/region/location column.",
+      "support": "no"
+    },
+    "cvaNMF/NMF baseline": {
+      "reason": "Fixed sample x genus matrix is available.",
+      "support": "yes"
+    },
+    "disease prediction": {
+      "reason": "No disease/phenotype columns.",
+      "support": "no"
+    },
+    "leave-one-study-out validation": {
+      "reason": "No explicit study/cohort column.",
+      "support": "no"
+    },
+    "pathway reconstruction": {
+      "reason": "No pathway abundance matrix.",
+      "support": "no"
+    },
+    "program-cohort stability": {
+      "reason": "No cohort labels; use biome stability instead.",
+      "support": "no"
+    },
+    "sequencing-platform confounder control": {
+      "reason": "No platform/instrument column.",
+      "support": "no"
+    },
+    "taxa reconstruction target": {
+      "reason": "Unnormalized corpus .data is sample x genus relative abundance.",
+      "support": "yes"
+    }
+  }
+}

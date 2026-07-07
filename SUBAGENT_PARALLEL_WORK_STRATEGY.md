@@ -18,6 +18,11 @@ Parallel workers are safe for read-only or output-isolated tasks:
 - Drafting documentation sections that do not modify the same files.
 - Inspecting MicroCorpus-260K metadata, as long as workers do not mutate or
   launch full pretraining jobs.
+- Reviewing ComPASS-Biome audit reports, pilot manifests, and bottleneck
+  summary tables after commands complete.
+- Reviewing taxa readout CSV/PNG reports after a validation run completes.
+- Comparing real, shuffle, and mean-baseline metrics from immutable generated
+  outputs.
 
 ## Avoid Parallel Writes
 
@@ -35,6 +40,19 @@ reviewed sequence.
 
 Do not parallelize commands that write under `runs/mgm_repro/infant_smoke` or
 touch `/home/sunyirong/shared/sunyirong/MicroCorpus-260K`.
+
+For ComPASS-Biome, do not parallelize commands that write under the same
+`runs/compass_biome/<stage>` directory. Embedding extraction and bottleneck
+training should remain serialized because they share GPU and output state.
+
+For the taxa readout sanity check, keep these stages serialized:
+
+- pilot dataset construction, because it defines sample IDs, splits, taxa order,
+  and retained-mass filtering for downstream artifacts.
+- frozen MGM embedding extraction, because it uses GPU and writes the shared
+  embedding cache for a run.
+- bottleneck training/evaluation, because real and shuffle controls share output
+  naming, GPU state, and metrics manifests.
 
 ## Loop Discipline
 

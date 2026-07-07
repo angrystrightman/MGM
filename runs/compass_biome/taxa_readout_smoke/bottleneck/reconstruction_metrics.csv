@@ -1,0 +1,10 @@
+model,split,num_samples,cross_entropy,top_20_recall,bray_curtis_similarity
+real,train,820,5.673612,0.272469,0.115037
+real,valid,104,5.71925,0.277988,0.112644
+real,test,100,5.715844,0.281425,0.121073
+mean_baseline,train,820,5.710747,0.172309,0.119933
+mean_baseline,valid,104,5.785756,0.170122,0.114195
+mean_baseline,test,100,5.785102,0.164436,0.1206
+shuffle,train,820,5.99498,0.178767,0.092931
+shuffle,valid,104,6.032759,0.177483,0.089551
+shuffle,test,100,6.029196,0.175705,0.095998
