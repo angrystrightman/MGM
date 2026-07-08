@@ -54,6 +54,18 @@ For the taxa readout sanity check, keep these stages serialized:
 - bottleneck training/evaluation, because real and shuffle controls share output
   naming, GPU state, and metrics manifests.
 
+For full260K K-sweep reruns, reuse the existing dataset and embeddings, but run
+each bottleneck command serially on the GPU. Different K values may write to
+separate output directories, but concurrent runs would compete for GPU memory
+and make resource failures harder to interpret. Read-only comparison of
+completed K-sweep CSV/PNG outputs is safe to parallelize.
+
+For usage-balancing or other regularized full260K bottleneck experiments, keep
+the real/shuffle training command serialized for the same reason. Parallel work
+is safe only after the run completes, for read-only comparison of manifests,
+metrics, diagnostics, and plots across baseline, compact, and regularized
+outputs.
+
 ## Loop Discipline
 
 Each execution loop should:

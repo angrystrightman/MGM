@@ -28,6 +28,37 @@ def _resolve_device(device_name: str):
     return torch.device(device_name)
 
 
+def usage_balance_loss(activations, mode: str = "kl_uniform_to_usage", eps: float = 1e-8):
+    """Penalize uneven mean program usage within a batch."""
+    import torch
+
+    if activations.ndim != 2:
+        raise ValueError("activations must be a 2D tensor")
+    if mode not in {"kl_uniform_to_usage", "mse"}:
+        raise ValueError("mode must be one of: kl_uniform_to_usage, mse")
+    q = activations.mean(dim=0)
+    num_programs = q.shape[0]
+    if num_programs <= 0:
+        raise ValueError("activations must contain at least one program")
+    uniform = torch.full_like(q, 1.0 / num_programs)
+    if mode == "mse":
+        return ((q - uniform) ** 2).mean()
+    return (uniform * (torch.log(uniform.clamp_min(eps)) - torch.log(q.clamp_min(eps)))).sum()
+
+
+def sample_entropy_target_loss(activations, target_effective_programs: float = 2.0, eps: float = 1e-8):
+    """Penalize sample entropy away from a target effective program count."""
+    import torch
+
+    if activations.ndim != 2:
+        raise ValueError("activations must be a 2D tensor")
+    if target_effective_programs <= 0:
+        raise ValueError("target_effective_programs must be positive")
+    target_entropy = torch.log(torch.tensor(float(target_effective_programs), dtype=activations.dtype, device=activations.device))
+    entropy = -(activations * torch.log(activations.clamp_min(eps))).sum(dim=1)
+    return ((entropy - target_entropy) ** 2).mean()
+
+
 def train_bottleneck_model(
     embeddings: np.ndarray,
     taxa_targets: np.ndarray,
@@ -41,6 +72,10 @@ def train_bottleneck_model(
     validation_indices: Sequence[int] | None = None,
     training_targets: np.ndarray | None = None,
     patience: int | None = None,
+    usage_balance_weight: float = 0.0,
+    usage_balance_mode: str = "kl_uniform_to_usage",
+    sample_entropy_weight: float = 0.0,
+    sample_entropy_target_effective: float = 2.0,
 ) -> dict[str, Any]:
     """Train a soft program bottleneck that reconstructs taxa distributions."""
     import torch
@@ -58,6 +93,16 @@ def train_bottleneck_model(
         raise ValueError("training_targets must match taxa_targets shape")
     if patience is not None and patience <= 0:
         raise ValueError("patience must be positive when provided")
+    if usage_balance_weight < 0:
+        raise ValueError("usage_balance_weight must be non-negative")
+    if usage_balance_mode not in {"kl_uniform_to_usage", "mse"}:
+        raise ValueError("usage_balance_mode must be one of: kl_uniform_to_usage, mse")
+    if sample_entropy_weight < 0:
+        raise ValueError("sample_entropy_weight must be non-negative")
+    if sample_entropy_target_effective <= 0:
+        raise ValueError("sample_entropy_target_effective must be positive")
+    if sample_entropy_target_effective > num_programs:
+        raise ValueError("sample_entropy_target_effective cannot exceed num_programs")
 
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
@@ -88,6 +133,10 @@ def train_bottleneck_model(
     for epoch in range(epochs):
         rng.shuffle(indices)
         epoch_losses: list[float] = []
+        epoch_reconstruction_losses: list[float] = []
+        epoch_usage_balance_losses: list[float] = []
+        epoch_entropy_losses: list[float] = []
+        epoch_sample_entropies: list[float] = []
         for start in range(0, len(indices), batch_size):
             batch_idx = torch.tensor(indices[start : start + batch_size], dtype=torch.long, device=device)
             batch_z = z.index_select(0, batch_idx)
@@ -96,18 +145,44 @@ def train_bottleneck_model(
             activations = torch.softmax(encoder(batch_z), dim=1)
             taxa_programs = torch.softmax(taxa_logits, dim=1)
             recon = activations @ taxa_programs
-            loss = -(batch_x * torch.log(recon.clamp_min(1e-8))).sum(dim=1).mean()
+            reconstruction_loss = -(batch_x * torch.log(recon.clamp_min(1e-8))).sum(dim=1).mean()
+            balance_loss = usage_balance_loss(activations, mode=usage_balance_mode)
+            entropy_target_loss = sample_entropy_target_loss(
+                activations,
+                target_effective_programs=sample_entropy_target_effective,
+            )
+            loss = (
+                reconstruction_loss
+                + usage_balance_weight * balance_loss
+                + sample_entropy_weight * entropy_target_loss
+            )
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             epoch_losses.append(float(loss.detach().cpu()))
+            epoch_reconstruction_losses.append(float(reconstruction_loss.detach().cpu()))
+            epoch_usage_balance_losses.append(float(balance_loss.detach().cpu()))
+            epoch_entropy_losses.append(float(entropy_target_loss.detach().cpu()))
+            batch_entropy = -(activations * torch.log(activations.clamp_min(1e-8))).sum(dim=1).mean()
+            epoch_sample_entropies.append(float(batch_entropy.detach().cpu()))
 
         with torch.no_grad():
             all_a = torch.softmax(encoder(z), dim=1)
             all_p = torch.softmax(taxa_logits, dim=1)
             all_recon = all_a @ all_p
-            objective_loss = -(train_target * torch.log(all_recon.clamp_min(1e-8))).sum(dim=1).mean()
+            reconstruction_objective_loss = -(train_target * torch.log(all_recon.clamp_min(1e-8))).sum(dim=1).mean()
+            full_balance_loss = usage_balance_loss(all_a, mode=usage_balance_mode)
+            full_entropy_target_loss = sample_entropy_target_loss(
+                all_a,
+                target_effective_programs=sample_entropy_target_effective,
+            )
+            full_sample_entropy = -(all_a * torch.log(all_a.clamp_min(1e-8))).sum(dim=1).mean()
+            objective_loss = (
+                reconstruction_objective_loss
+                + usage_balance_weight * full_balance_loss
+                + sample_entropy_weight * full_entropy_target_loss
+            )
             true_loss = -(x * torch.log(all_recon.clamp_min(1e-8))).sum(dim=1).mean()
             train_idx_tensor = torch.tensor(indices, dtype=torch.long, device=device)
             train_loss = -(
@@ -128,10 +203,19 @@ def train_bottleneck_model(
             {
                 "epoch": float(epoch + 1),
                 "loss": float(objective_loss.detach().cpu()),
+                "regularized_loss": float(objective_loss.detach().cpu()),
+                "reconstruction_loss": float(reconstruction_objective_loss.detach().cpu()),
                 "true_loss": float(true_loss.detach().cpu()),
                 "train_loss": float(train_loss.detach().cpu()),
                 "validation_loss": float(validation_loss.detach().cpu()) if validation_loss is not None else float("nan"),
                 "batch_loss_mean": float(np.mean(epoch_losses)),
+                "batch_reconstruction_loss_mean": float(np.mean(epoch_reconstruction_losses)),
+                "usage_balance_loss": float(full_balance_loss.detach().cpu()),
+                "batch_usage_balance_loss_mean": float(np.mean(epoch_usage_balance_losses)),
+                "sample_entropy_mean": float(full_sample_entropy.detach().cpu()),
+                "sample_entropy_target_loss": float(full_entropy_target_loss.detach().cpu()),
+                "batch_sample_entropy_target_loss_mean": float(np.mean(epoch_entropy_losses)),
+                "batch_sample_entropy_mean": float(np.mean(epoch_sample_entropies)),
             }
         )
         if early_stop_score < best_score - 1e-7:
@@ -321,6 +405,10 @@ def run_pilot(
     controls: str = "all",
     patience: int | None = None,
     make_plots: bool = True,
+    usage_balance_weight: float = 0.0,
+    usage_balance_mode: str = "kl_uniform_to_usage",
+    sample_entropy_weight: float = 0.0,
+    sample_entropy_target_effective: float = 2.0,
 ) -> dict[str, object]:
     sample_ids = pd.read_csv(dataset_dir / "sample_ids.csv")["sample_id"].astype(str).tolist()
     taxa_names = pd.read_csv(dataset_dir / "taxa_names.csv")["taxon"].astype(str).tolist()
@@ -357,6 +445,10 @@ def run_pilot(
         train_indices=train_indices,
         validation_indices=validation_indices,
         patience=patience,
+        usage_balance_weight=usage_balance_weight,
+        usage_balance_mode=usage_balance_mode,
+        sample_entropy_weight=sample_entropy_weight,
+        sample_entropy_target_effective=sample_entropy_target_effective,
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -412,6 +504,10 @@ def run_pilot(
             train_indices=train_indices,
             validation_indices=validation_indices,
             patience=patience,
+            usage_balance_weight=usage_balance_weight,
+            usage_balance_mode=usage_balance_mode,
+            sample_entropy_weight=sample_entropy_weight,
+            sample_entropy_target_effective=sample_entropy_target_effective,
         )
         metric_rows.extend(
             reconstruction_metric_rows(
@@ -479,6 +575,10 @@ def run_pilot(
         "device": result["device"],
         "controls": controls,
         "patience": patience,
+        "usage_balance_weight": usage_balance_weight,
+        "usage_balance_loss": usage_balance_mode,
+        "sample_entropy_weight": sample_entropy_weight,
+        "sample_entropy_target_effective": sample_entropy_target_effective,
         "final_loss": result["metrics"][-1]["loss"],
         "split_counts": pd.Series(splits).value_counts().sort_index().to_dict(),
         "outputs": {
@@ -513,6 +613,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--label-column", default="biome_1")
     parser.add_argument("--controls", choices=["none", "shuffle", "mean", "all"], default="all")
     parser.add_argument("--patience", type=int, default=None)
+    parser.add_argument("--usage-balance-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--usage-balance-loss",
+        choices=["kl_uniform_to_usage", "mse"],
+        default="kl_uniform_to_usage",
+    )
+    parser.add_argument("--sample-entropy-weight", type=float, default=0.0)
+    parser.add_argument("--sample-entropy-target-effective", type=float, default=2.0)
     parser.add_argument("--no-plots", action="store_true")
     return parser
 
@@ -534,6 +642,10 @@ def main(argv: list[str] | None = None) -> int:
         controls=args.controls,
         patience=args.patience,
         make_plots=not args.no_plots,
+        usage_balance_weight=args.usage_balance_weight,
+        usage_balance_mode=args.usage_balance_loss,
+        sample_entropy_weight=args.sample_entropy_weight,
+        sample_entropy_target_effective=args.sample_entropy_target_effective,
     )
     print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0

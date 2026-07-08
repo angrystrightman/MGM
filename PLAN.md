@@ -386,9 +386,28 @@ Latest validation on 2026-07-07:
   was 0.4543 and Bray-Curtis 0.3306, versus mean baseline 0.2187/0.1249 and
   shuffle 0.2189/0.1248. Early stopping restored the best validation checkpoint
   after 54 real-model epochs.
+- Full260K K sweep reran only the bottleneck stage on the same dataset and
+  frozen embeddings, keeping the `K=32` hyperparameters fixed and changing only
+  `num_programs`. `K=16` reached real test Top-20 recall 0.3241 and
+  Bray-Curtis 0.2138, still above controls but worse than `K=32` and with
+  heavier collapse (`dead_program_fraction=0.8125`). `K=8` reached real test
+  Top-20 recall 0.4017 and Bray-Curtis 0.2705, below `K=32` but clearly above
+  controls and with better compactness diagnostics
+  (`dead_program_fraction=0.5000`, dictionary off-diagonal cosine 0.1956).
+  Current conclusion: `K=32` remains best for reconstruction, `K=8` is a useful
+  compact tradeoff, and `K=16` is dominated under this fixed batch/lr setting.
+- Full260K anti-collapse run added optional global usage balancing and a local
+  entropy target while keeping the same `K=32`, data, embeddings, batch size,
+  learning rate, controls, and early stopping policy. With
+  `usage_balance_weight=0.05`, `sample_entropy_weight=0.10`, and target
+  effective programs 2.0, real test Top-20 recall improved to 0.5422 and
+  Bray-Curtis to 0.4414. Usage also improved: dead program fraction dropped to
+  0.1563, effective programs per sample rose to 2.1754, and dictionary
+  off-diagonal cosine dropped to 0.0289. Because the primary run passed the
+  positive gate, the stronger `balance010` follow-up was not run.
 - Interpretation: the taxa readout sanity check is strongly positive for MGM
-  embedding carrying taxa-composition signal, and the signal improved from 10k
-  to 100k to full260K. It is still only medium for interpretable program
-  discovery because usage remains collapsed (`dead_program_fraction=0.75`,
-  effective programs per sample 1.4863). Next modeling work should add
-  anti-collapse regularization or warm starts before making biological claims.
+  embedding carrying taxa-composition signal, and the anti-collapse objective is
+  the best current bottleneck setting for both reconstruction and program usage
+  balance. This is still an architecture-level sanity check rather than a
+  biological mechanism claim; next work should inspect program taxa/biome
+  coherence and test stability before moving to disease/pathway cohorts.

@@ -1,0 +1,14 @@
+program,metric,value
+all,dead_program_fraction,0.0
+all,effective_programs_mean,1.997463
+all,activation_entropy_mean,0.668999
+all,dictionary_entropy_mean,9.165047
+all,dictionary_cosine_mean_offdiag,0.995448
+0,program_mean_usage,0.122941
+1,program_mean_usage,0.117048
+2,program_mean_usage,0.095757
+3,program_mean_usage,0.080273
+4,program_mean_usage,0.335778
+5,program_mean_usage,0.098592
+6,program_mean_usage,0.082634
+7,program_mean_usage,0.066978

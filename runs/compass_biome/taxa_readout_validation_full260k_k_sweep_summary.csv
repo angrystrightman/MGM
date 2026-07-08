@@ -1,0 +1,4 @@
+K,epochs_ran,batch_size,learning_rate,test_real_top20,test_real_bray_curtis,test_mean_top20,test_mean_bray_curtis,test_shuffle_top20,test_shuffle_bray_curtis,dead_program_fraction,effective_programs_mean,activation_entropy_mean,dictionary_cosine_mean_offdiag
+32,54,2048,0.03,0.454297,0.330572,0.218717,0.124867,0.21889,0.124824,0.75,1.486254,0.324719,0.517616
+16,59,2048,0.03,0.324118,0.213823,0.218717,0.124867,0.21889,0.124801,0.8125,1.150208,0.117444,0.663721
+8,46,2048,0.03,0.40167,0.270513,0.218717,0.124867,0.215078,0.124983,0.5,1.223508,0.166542,0.195566

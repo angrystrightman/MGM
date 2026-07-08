@@ -1,0 +1,2 @@
+model,split,num_samples,cross_entropy,top_20_recall,bray_curtis_similarity
+real,train,128,8.593037,0.268598,0.015846

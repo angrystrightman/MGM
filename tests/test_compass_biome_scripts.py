@@ -24,7 +24,12 @@ from scripts.compass_biome_utils import (
 from scripts.audit_microcorpus_260k import summarize_metadata
 from scripts.build_compass_pilot_dataset import write_pilot_dataset
 from scripts.extract_compass_embeddings import last_valid_token_embeddings, resolve_sample_positions
-from scripts.run_compass_bottleneck_pilot import run_pilot, train_bottleneck_model
+from scripts.run_compass_bottleneck_pilot import (
+    run_pilot,
+    sample_entropy_target_loss,
+    train_bottleneck_model,
+    usage_balance_loss,
+)
 
 
 class CompassBiomeMetadataTests(unittest.TestCase):
@@ -420,6 +425,44 @@ class CompassBiomeEmbeddingTests(unittest.TestCase):
 
 
 class CompassBiomeBottleneckTests(unittest.TestCase):
+    def test_usage_balance_loss_penalizes_collapsed_usage_more_than_uniform_usage(self):
+        import torch
+
+        collapsed = torch.tensor(
+            [
+                [0.95, 0.05, 0.00, 0.00],
+                [0.90, 0.10, 0.00, 0.00],
+                [0.92, 0.08, 0.00, 0.00],
+            ],
+            dtype=torch.float32,
+        )
+        balanced = torch.full((3, 4), 0.25, dtype=torch.float32)
+
+        collapsed_loss = usage_balance_loss(collapsed, mode="kl_uniform_to_usage")
+        balanced_loss = usage_balance_loss(balanced, mode="kl_uniform_to_usage")
+        collapsed_mse = usage_balance_loss(collapsed, mode="mse")
+        balanced_mse = usage_balance_loss(balanced, mode="mse")
+
+        self.assertGreater(float(collapsed_loss), float(balanced_loss) + 1.0)
+        self.assertAlmostEqual(float(balanced_loss), 0.0, places=6)
+        self.assertGreater(float(collapsed_mse), float(balanced_mse))
+        self.assertAlmostEqual(float(balanced_mse), 0.0, places=6)
+
+    def test_sample_entropy_target_loss_prefers_target_effective_program_count(self):
+        import torch
+
+        one_hot = torch.tensor([[1.0, 0.0, 0.0, 0.0]], dtype=torch.float32)
+        near_two_programs = torch.tensor([[0.5, 0.5, 0.0, 0.0]], dtype=torch.float32)
+        fully_uniform = torch.full((1, 4), 0.25, dtype=torch.float32)
+
+        one_hot_loss = sample_entropy_target_loss(one_hot, target_effective_programs=2.0)
+        target_loss = sample_entropy_target_loss(near_two_programs, target_effective_programs=2.0)
+        uniform_loss = sample_entropy_target_loss(fully_uniform, target_effective_programs=2.0)
+
+        self.assertAlmostEqual(float(target_loss), 0.0, places=6)
+        self.assertGreater(float(one_hot_loss), float(target_loss))
+        self.assertGreater(float(uniform_loss), float(target_loss))
+
     def test_train_bottleneck_model_learns_shapes_and_decreases_loss(self):
         rng = np.random.default_rng(0)
         embeddings = rng.normal(size=(12, 6)).astype(np.float32)
@@ -443,6 +486,39 @@ class CompassBiomeBottleneckTests(unittest.TestCase):
         self.assertTrue(np.allclose(result["activations"].sum(axis=1), 1.0, atol=1e-5))
         self.assertTrue(np.allclose(result["taxa_programs"].sum(axis=1), 1.0, atol=1e-5))
         self.assertLess(result["metrics"][-1]["loss"], result["metrics"][0]["loss"])
+
+    def test_train_bottleneck_model_reports_regularization_metrics_when_enabled(self):
+        rng = np.random.default_rng(1)
+        embeddings = rng.normal(size=(16, 5)).astype(np.float32)
+        taxa_targets = rng.random(size=(16, 4)).astype(np.float32)
+        taxa_targets = taxa_targets / taxa_targets.sum(axis=1, keepdims=True)
+
+        result = train_bottleneck_model(
+            embeddings=embeddings,
+            taxa_targets=taxa_targets,
+            num_programs=4,
+            epochs=4,
+            batch_size=8,
+            learning_rate=0.03,
+            seed=0,
+            device_name="cpu",
+            usage_balance_weight=0.05,
+            usage_balance_mode="kl_uniform_to_usage",
+            sample_entropy_weight=0.10,
+            sample_entropy_target_effective=2.0,
+        )
+
+        final_metrics = result["metrics"][-1]
+        for key in [
+            "reconstruction_loss",
+            "regularized_loss",
+            "usage_balance_loss",
+            "sample_entropy_mean",
+            "sample_entropy_target_loss",
+        ]:
+            self.assertIn(key, final_metrics)
+            self.assertTrue(np.isfinite(final_metrics[key]))
+        self.assertGreaterEqual(final_metrics["regularized_loss"], final_metrics["reconstruction_loss"])
 
     def test_run_pilot_writes_split_metrics_controls_and_diagnostics(self):
         sample_ids = [f"S{i}" for i in range(6)]
@@ -516,6 +592,10 @@ class CompassBiomeBottleneckTests(unittest.TestCase):
                 controls="all",
                 patience=None,
                 make_plots=False,
+                usage_balance_weight=0.05,
+                usage_balance_mode="kl_uniform_to_usage",
+                sample_entropy_weight=0.10,
+                sample_entropy_target_effective=2.0,
             )
 
             metrics = pd.read_csv(root / "bottleneck" / "reconstruction_metrics.csv")
@@ -524,6 +604,13 @@ class CompassBiomeBottleneckTests(unittest.TestCase):
             self.assertTrue((root / "bottleneck" / "program_diagnostics.csv").exists())
             self.assertTrue((root / "bottleneck" / "top_taxa_per_program.csv").exists())
             self.assertEqual(manifest["controls"], "all")
+            self.assertEqual(manifest["usage_balance_weight"], 0.05)
+            self.assertEqual(manifest["usage_balance_loss"], "kl_uniform_to_usage")
+            self.assertEqual(manifest["sample_entropy_weight"], 0.10)
+            self.assertEqual(manifest["sample_entropy_target_effective"], 2.0)
+            training_metrics = pd.read_csv(root / "bottleneck" / "training_metrics.csv")
+            self.assertIn("regularized_loss", training_metrics.columns)
+            self.assertIn("usage_balance_loss", training_metrics.columns)
 
 
 if __name__ == "__main__":

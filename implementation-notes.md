@@ -281,3 +281,204 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 /home/sunyirong/miniforge3/envs/mgm
   `(263065,1000)`, aligned sample IDs, finite arrays, positive retained mass,
   real metrics above both controls, and real metrics above the 100K reference
   thresholds. The full260K run directory uses about 2.2GB.
+
+## 2026-07-07 ComPASS-Biome Full260K K=16/8 Rerun
+
+- Goal: rerun only the bottleneck stage on the existing full260K dataset and
+  existing frozen MGM embeddings, changing only the program count from the
+  baseline `K=32` to `K=16` and `K=8`.
+- Keep all other settings matched to the full260K `K=32` run:
+  `batch_size=2048`, `learning_rate=0.03`, `epochs=100`, `patience=15`,
+  `controls=all`, `top_k=20`, `seed=0`, and `CUDA_VISIBLE_DEVICES=0`.
+- Do not rebuild the dataset, do not re-extract embeddings, do not restore the
+  deleted smoke/10k/100k result artifacts, and do not change MGM or ComPASS
+  core model code.
+- Preflight status: current branch is `codex/mgm-repro-scaffold`; the deleted
+  tracked files are the user-removed smoke/10k/100k lightweight result
+  artifacts; full260K dataset, embeddings, and `K=32` baseline metrics still
+  exist; `/data` has about 35GB available; all 8 RTX 4090 GPUs are idle.
+- Fresh preflight verification passed:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m unittest tests.test_mgm_repro_scripts tests.test_compass_biome_scripts -v
+```
+
+- Planned `K=16` command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES=0 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  scripts/run_compass_bottleneck_pilot.py \
+  --dataset-dir runs/compass_biome/taxa_readout_validation_full260k/dataset \
+  --embeddings runs/compass_biome/taxa_readout_validation_full260k/embeddings/embeddings.npz \
+  --output-dir runs/compass_biome/taxa_readout_validation_full260k_K16/bottleneck \
+  --num-programs 16 \
+  --epochs 100 \
+  --batch-size 2048 \
+  --learning-rate 0.03 \
+  --controls all \
+  --top-k 20 \
+  --device auto \
+  --patience 15
+```
+
+- Planned `K=8` command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES=0 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  scripts/run_compass_bottleneck_pilot.py \
+  --dataset-dir runs/compass_biome/taxa_readout_validation_full260k/dataset \
+  --embeddings runs/compass_biome/taxa_readout_validation_full260k/embeddings/embeddings.npz \
+  --output-dir runs/compass_biome/taxa_readout_validation_full260k_K8/bottleneck \
+  --num-programs 8 \
+  --epochs 100 \
+  --batch-size 2048 \
+  --learning-rate 0.03 \
+  --controls all \
+  --top-k 20 \
+  --device auto \
+  --patience 15
+```
+
+- `K=16` run completed and artifact validation passed. Manifest recorded
+  `num_samples=263065`, `num_taxa=1000`, `embedding_width=256`,
+  `num_programs=16`, `epochs_ran=59`, `batch_size=2048`,
+  `learning_rate=0.03`, and `device=cuda`.
+- `K=16` arrays were finite with expected shapes: `A (263065,16)`,
+  `P_taxa (16,1000)`, and reconstructions `(263065,1000)`. Required CSV and
+  PNG report files were present and non-empty.
+- `K=16` test metrics: real Top-20 recall 0.3241 and Bray-Curtis 0.2138.
+  Program diagnostics worsened relative to `K=32`: dead program fraction
+  0.8125, effective programs per sample 1.1502, activation entropy mean 0.1174,
+  and dictionary off-diagonal cosine 0.6637.
+- `K=8` run completed and artifact validation passed. Manifest recorded
+  `num_samples=263065`, `num_taxa=1000`, `embedding_width=256`,
+  `num_programs=8`, `epochs_ran=46`, `batch_size=2048`,
+  `learning_rate=0.03`, and `device=cuda`.
+- `K=8` arrays were finite with expected shapes: `A (263065,8)`,
+  `P_taxa (8,1000)`, and reconstructions `(263065,1000)`. Required CSV and
+  PNG report files were present and non-empty, and output sample IDs matched
+  the reused full260K dataset order exactly.
+- `K=8` test metrics: real Top-20 recall 0.4017 and Bray-Curtis 0.2705, versus
+  mean baseline 0.2187/0.1249 and shuffle 0.2151/0.1250. Dead program fraction
+  improved to 0.5000, effective programs per sample was 1.2235, activation
+  entropy mean was 0.1665, and dictionary off-diagonal cosine improved to
+  0.1956.
+- Wrote the comparison artifact
+  `runs/compass_biome/taxa_readout_validation_full260k_k_sweep_summary.csv`.
+  Current interpretation: `K=32` remains best for reconstruction; `K=8` is a
+  compact reconstruction tradeoff that still clearly beats controls and reduces
+  dead-program fraction/dictionary redundancy; `K=16` is dominated by both
+  `K=32` and `K=8` under this fixed hyperparameter setting.
+
+## 2026-07-07 ComPASS-Biome Program Usage Balancing
+
+- Goal: test a minimal anti-collapse regularization on the best-reconstructing
+  full260K `K=32` bottleneck without changing MGM, the dataset, embeddings,
+  controls, or primary reconstruction metrics.
+- Design choice: add optional global usage balancing plus a local entropy
+  target. Direct entropy minimization was not used because current
+  `effective_programs_mean` is already low; minimizing entropy alone would push
+  samples closer to one-hot usage.
+- Implemented optional CLI arguments with default-off behavior:
+  `--usage-balance-weight`, `--usage-balance-loss`,
+  `--sample-entropy-weight`, and `--sample-entropy-target-effective`.
+- Training metrics now include reconstruction and regularization components:
+  `reconstruction_loss`, `regularized_loss`, `usage_balance_loss`,
+  `sample_entropy_mean`, and `sample_entropy_target_loss`.
+- TDD loop: added tests for collapsed-vs-uniform usage balance, entropy target,
+  regularized training metrics, and manifest fields. The first targeted test
+  run failed because `sample_entropy_target_loss` did not exist yet, then passed
+  after the implementation.
+- Fresh code readiness verification passed:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m unittest tests.test_mgm_repro_scripts tests.test_compass_biome_scripts -v
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m py_compile scripts/compass_biome_utils.py scripts/run_compass_bottleneck_pilot.py
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python -m pip check
+```
+
+- Planned small smoke command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES=0 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  scripts/run_compass_bottleneck_pilot.py \
+  --dataset-dir runs/compass_biome/pilot_dataset \
+  --embeddings runs/compass_biome/embeddings/embeddings.npz \
+  --output-dir runs/compass_biome/usage_balance_smoke_K8/bottleneck \
+  --num-programs 8 \
+  --epochs 10 \
+  --batch-size 32 \
+  --learning-rate 0.01 \
+  --controls none \
+  --top-k 20 \
+  --device auto \
+  --usage-balance-weight 0.05 \
+  --usage-balance-loss kl_uniform_to_usage \
+  --sample-entropy-weight 0.10 \
+  --sample-entropy-target-effective 2.0 \
+  --no-plots
+```
+
+- Small usage-balance smoke completed on CUDA and passed artifact validation:
+  `A (128,8)`, `P_taxa (8,9665)`, reconstructions `(128,9665)`, manifest
+  records the new regularization arguments, and `training_metrics.csv` contains
+  finite regularization columns. Final smoke metrics included reconstruction
+  loss 8.5930, regularized loss 8.6044, usage balance loss 0.1348, mean sample
+  entropy 0.6690, and entropy-target loss 0.0464.
+- Planned full260K primary command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES=0 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  scripts/run_compass_bottleneck_pilot.py \
+  --dataset-dir runs/compass_biome/taxa_readout_validation_full260k/dataset \
+  --embeddings runs/compass_biome/taxa_readout_validation_full260k/embeddings/embeddings.npz \
+  --output-dir runs/compass_biome/taxa_readout_validation_full260k_K32_balance005_entropy2/bottleneck \
+  --num-programs 32 \
+  --epochs 100 \
+  --batch-size 2048 \
+  --learning-rate 0.03 \
+  --controls all \
+  --top-k 20 \
+  --device auto \
+  --patience 15 \
+  --usage-balance-weight 0.05 \
+  --usage-balance-loss kl_uniform_to_usage \
+  --sample-entropy-weight 0.10 \
+  --sample-entropy-target-effective 2.0
+```
+
+- Full260K primary usage-balance run completed and passed artifact validation:
+  manifest recorded `num_samples=263065`, `num_taxa=1000`,
+  `embedding_width=256`, `num_programs=32`, `epochs_ran=54`,
+  `usage_balance_weight=0.05`, `sample_entropy_weight=0.10`,
+  `sample_entropy_target_effective=2.0`, and `device=cuda`.
+- Output arrays were finite with expected shapes: `A (263065,32)`,
+  `P_taxa (32,1000)`, and reconstructions `(263065,1000)`. Output sample IDs
+  matched the full260K dataset order exactly.
+- Full260K usage-balance test metrics were strongly positive: real Top-20
+  recall 0.5422 and Bray-Curtis 0.4414, versus mean baseline 0.2187/0.1249 and
+  shuffle 0.2162/0.1266.
+- Program usage improved substantially relative to baseline `K=32`: dead
+  program fraction 0.1563, effective programs per sample 2.1754, activation
+  entropy mean 0.6540, and dictionary off-diagonal cosine 0.0289.
+- Gate decision: do not run the stronger `balance010` condition. The primary
+  run already reached `dead_program_fraction <= 0.50`, improved reconstruction
+  above the unregularized baseline, and remained clearly separated from both
+  controls. Running a second stronger setting now would be an unnecessary
+  hyperparameter expansion.
+- Wrote comparison artifact
+  `runs/compass_biome/taxa_readout_validation_full260k_usage_balance_summary.csv`
+  comparing baseline `K=32`, compact `K=8`, and regularized `K=32`.
