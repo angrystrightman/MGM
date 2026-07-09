@@ -482,3 +482,303 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES=0 \
 - Wrote comparison artifact
   `runs/compass_biome/taxa_readout_validation_full260k_usage_balance_summary.csv`
   comparing baseline `K=32`, compact `K=8`, and regularized `K=32`.
+
+## 2026-07-08 - ComPASS-Biome dictionary diversity regularization
+
+- Goal: add optional dictionary diversity regularization to reduce redundant
+  taxa program dictionaries without changing MGM teacher embeddings, full260K
+  dataset construction, or existing default bottleneck behavior.
+- Design decision: use hinge cosine as the default diversity loss rather than
+  hard orthogonality. Microbiome programs can legitimately share taxa, so the
+  first regularizer only penalizes off-diagonal dictionary cosine above a
+  threshold.
+- Added CLI/API arguments:
+  `--dictionary-diversity-weight`,
+  `--dictionary-diversity-loss {hinge_cosine,mse_offdiag}`, and
+  `--dictionary-diversity-threshold`.
+- Added diagnostics for dictionary redundancy tails:
+  `dictionary_cosine_max_offdiag`, p90, p95, top-20 taxa overlap mean/max, and
+  top-20 Jaccard mean.
+- Test-first verification passed:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m unittest tests.test_mgm_repro_scripts tests.test_compass_biome_scripts -v
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m py_compile scripts/compass_biome_utils.py scripts/run_compass_bottleneck_pilot.py
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python -m pip check
+```
+
+- Planned smoke command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES=0 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  scripts/run_compass_bottleneck_pilot.py \
+  --dataset-dir runs/compass_biome/pilot_dataset \
+  --embeddings runs/compass_biome/embeddings/embeddings.npz \
+  --output-dir runs/compass_biome/dictionary_diversity_smoke_K8/bottleneck \
+  --num-programs 8 \
+  --epochs 10 \
+  --batch-size 32 \
+  --learning-rate 0.01 \
+  --controls none \
+  --top-k 20 \
+  --device auto \
+  --dictionary-diversity-weight 0.05 \
+  --dictionary-diversity-loss hinge_cosine \
+  --dictionary-diversity-threshold 0.30 \
+  --no-plots
+```
+
+- Dictionary-diversity smoke completed on CUDA and passed artifact validation:
+  manifest recorded `dictionary_diversity_weight=0.05`,
+  `dictionary_diversity_loss_type=hinge_cosine`, and
+  `dictionary_diversity_threshold=0.30`. Output arrays were finite with
+  `A (128,8)`, `P_taxa (8,9665)`, and reconstruction `(128,9665)`.
+- Planned full260K diversity-only command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES=0 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  scripts/run_compass_bottleneck_pilot.py \
+  --dataset-dir runs/compass_biome/taxa_readout_validation_full260k/dataset \
+  --embeddings runs/compass_biome/taxa_readout_validation_full260k/embeddings/embeddings.npz \
+  --output-dir runs/compass_biome/taxa_readout_validation_full260k_K32_div005_thr030/bottleneck \
+  --num-programs 32 \
+  --epochs 100 \
+  --batch-size 2048 \
+  --learning-rate 0.03 \
+  --controls all \
+  --top-k 20 \
+  --device auto \
+  --patience 15 \
+  --dictionary-diversity-weight 0.05 \
+  --dictionary-diversity-loss hinge_cosine \
+  --dictionary-diversity-threshold 0.30
+```
+
+- Full260K diversity-only run completed on CUDA and passed artifact validation:
+  `A (263065,32)`, `P_taxa (32,1000)`, reconstruction `(263065,1000)`,
+  finite values, exact sample count, and real/mean/shuffle metrics present for
+  train/valid/test. It early-stopped after 31 epochs.
+- Test metrics for `K32_div005_thr030`: real Top-20 recall `0.4560`,
+  Bray-Curtis `0.3278`; mean baseline `0.2187/0.1249`; shuffle
+  `0.2163/0.1249`.
+- Dictionary diversity effect was isolated: dictionary cosine mean offdiag
+  dropped to `0.1363` with max `0.3253`, p90 `0.2651`, p95 `0.2896`, and
+  top-20 overlap mean `1.4335`; usage collapse remained high with
+  `dead_program_fraction=0.75` and `effective_programs_mean=1.4842`.
+- Planned full260K balanced plus weak diversity command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES=0 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  scripts/run_compass_bottleneck_pilot.py \
+  --dataset-dir runs/compass_biome/taxa_readout_validation_full260k/dataset \
+  --embeddings runs/compass_biome/taxa_readout_validation_full260k/embeddings/embeddings.npz \
+  --output-dir runs/compass_biome/taxa_readout_validation_full260k_K32_balance005_entropy2_div002_thr025/bottleneck \
+  --num-programs 32 \
+  --epochs 100 \
+  --batch-size 2048 \
+  --learning-rate 0.03 \
+  --controls all \
+  --top-k 20 \
+  --device auto \
+  --patience 15 \
+  --usage-balance-weight 0.05 \
+  --usage-balance-loss kl_uniform_to_usage \
+  --sample-entropy-weight 0.10 \
+  --sample-entropy-target-effective 2.0 \
+  --dictionary-diversity-weight 0.02 \
+  --dictionary-diversity-loss hinge_cosine \
+  --dictionary-diversity-threshold 0.25
+```
+
+- Full260K balanced plus weak diversity run completed on CUDA and passed
+  artifact validation: `A (263065,32)`, `P_taxa (32,1000)`, reconstruction
+  `(263065,1000)`, finite values, exact sample count, and real/mean/shuffle
+  metrics present for train/valid/test. It early-stopped after 67 epochs.
+- Test metrics for `K32_balance005_entropy2_div002_thr025`: real Top-20 recall
+  `0.5440`, Bray-Curtis `0.4437`; mean baseline `0.2187/0.1249`; shuffle
+  `0.2150/0.1275`.
+- Usage and reconstruction stayed at least as strong as the balanced parent:
+  `dead_program_fraction=0.1250`, `effective_programs_mean=2.2293`,
+  `activation_entropy_mean=0.6826`. Dictionary redundancy remained low with
+  cosine mean `0.0293`, max `0.4206`, p90 `0.0893`, p95 `0.1537`, and top-20
+  overlap mean `0.9617`.
+- Wrote comparison artifact
+  `runs/compass_biome/taxa_readout_validation_full260k_dictionary_diversity_summary.csv`
+  comparing `K32_baseline`, `K32_div005_thr030`,
+  `K32_balance005_entropy2`, `K32_balance005_entropy2_div002_thr025`,
+  `K16_compact`, and `K8_compact` with the same diagnostics.
+- Interpretation: dictionary diversity alone successfully reduces dictionary
+  redundancy but leaves program usage collapse untouched. Balanced plus weak
+  diversity is the current strongest setting in this run family: it preserves
+  the positive reconstruction/control gap, slightly improves balanced-parent
+  reconstruction and usage, and does not introduce extra dictionary redundancy.
+
+## 2026-07-08 - ComPASS-Biome regularized K-resolution sweep
+
+- Goal: choose a practical program resolution under the current best objective
+  rather than judging K with the older unbalanced baseline. This run keeps the
+  full260K dataset, frozen MGM embeddings, Top1000 taxa target, batch size,
+  learning rate, controls, and regularization weights fixed.
+- Existing K32 anchor was validated before the sweep:
+  `runs/compass_biome/taxa_readout_validation_full260k_K32_balance005_entropy2_div002_thr025/bottleneck`
+  has `num_samples=263065`, `num_taxa=1000`, `embedding_width=256`,
+  `num_programs=32`, `usage_balance_weight=0.05`, and
+  `dictionary_diversity_weight=0.02`.
+- Added tested summary tooling in `scripts/summarize_compass_k_resolution.py`
+  to recompute diagnostics from `bottleneck_outputs.npz`, write a run-level
+  summary, write an active-program report with top taxa and top biome label,
+  and produce a deterministic recommendation JSON.
+- Verification before full sweep:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m unittest tests.test_mgm_repro_scripts tests.test_compass_biome_scripts -v
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m py_compile scripts/compass_biome_utils.py scripts/run_compass_bottleneck_pilot.py scripts/summarize_compass_k_resolution.py
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python -m pip check
+```
+
+- Planned regularized full260K sweep commands use `CUDA_VISIBLE_DEVICES=0`,
+  `batch_size=2048`, `learning_rate=0.03`, `epochs=100`, `patience=15`,
+  `usage_balance_weight=0.05`, `sample_entropy_weight=0.10`,
+  `sample_entropy_target_effective=2.0`, `dictionary_diversity_weight=0.02`,
+  and `dictionary_diversity_threshold=0.25`.
+- Regularized full260K K sweep completed without fallback:
+  - `K=4`: 74 epochs, real test Top-20 `0.3990`, Bray-Curtis `0.2712`,
+    dead fraction `0.0000`, effective programs `1.3046`, dictionary p95 cosine
+    `0.0635`.
+  - `K=8`: 41 epochs, real test Top-20 `0.4549`, Bray-Curtis `0.3179`,
+    dead fraction `0.0000`, effective programs `1.5218`, dictionary p95 cosine
+    `0.1240`.
+  - `K=16`: 46 epochs, real test Top-20 `0.4884`, Bray-Curtis `0.3786`,
+    dead fraction `0.0000`, effective programs `1.9569`, dictionary p95 cosine
+    `0.1415`.
+  - `K=32` anchor: 67 epochs, real test Top-20 `0.5440`, Bray-Curtis
+    `0.4437`, dead fraction `0.1250`, effective programs `2.2293`,
+    dictionary p95 cosine `0.1537`.
+  - `K=64`: 55 epochs, real test Top-20 `0.5783`, Bray-Curtis `0.4933`,
+    dead fraction `0.4531`, effective programs `2.4595`, dictionary p95 cosine
+    `0.2396`.
+- Wrote K-resolution artifacts:
+  `runs/compass_biome/taxa_readout_validation_full260k_regularized_k_sweep_summary.csv`,
+  `runs/compass_biome/taxa_readout_validation_full260k_regularized_k_program_report.csv`,
+  and
+  `runs/compass_biome/taxa_readout_validation_full260k_regularized_k_recommendation.json`.
+- Recommendation result: primary K is `32`, compact K is `16`, and K64 is not
+  preferred over K32. K64 improves reconstruction but violates the
+  interpretability gate because dead-program fraction and dictionary p95 cosine
+  are worse than K32. K16 is the compact setting because it clears control-gap
+  and 80%-of-K32 reconstruction gates, but it does not reach the 90%-of-K32
+  high-fidelity gate.
+
+## 2026-07-08 - ComPASS-Biome NMF warm start
+
+- Goal: test whether train-split-only NMF taxa signatures are useful as a
+  dictionary prior for the current primary setting, `K=32` with usage balance
+  and weak dictionary diversity. This keeps the full260K dataset, frozen MGM
+  embeddings, Top1000 taxa target, optimizer scale, controls, and regularizers
+  fixed.
+- Added `scripts/fit_compass_nmf_dictionary.py`. It fits sklearn NMF only on
+  `sample_splits.csv` train rows, using `init=nndsvda`, `solver=mu`,
+  `beta_loss=kullback-leibler`, `max_iter=500`, and `seed=0`, then writes a
+  row-normalized `taxa_programs [K,G]`, top-taxa report, manifest, and
+  NMF-oracle reconstruction metrics.
+- Extended `scripts/run_compass_bottleneck_pilot.py` with optional NMF
+  dictionary interfaces while preserving default behavior:
+  `--taxa-dictionary-init`, `--freeze-taxa-dictionary`,
+  `--dictionary-anchor-weight`, and
+  `--dictionary-anchor-loss kl_anchor_to_current`.
+- Added `scripts/summarize_compass_nmf_warm_start.py` to compare the parent
+  `K32_balance005_entropy2_div002_thr025`, NMF oracle, NMF fixed, NMF
+  trainable, and NMF anchor runs. The summary reports reconstruction/control
+  gaps, usage diagnostics, dictionary redundancy, and NMF init-to-final drift.
+- Verification after code changes passed:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m unittest tests.test_mgm_repro_scripts tests.test_compass_biome_scripts -v
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python \
+  -m py_compile scripts/compass_biome_utils.py scripts/run_compass_bottleneck_pilot.py \
+  scripts/fit_compass_nmf_dictionary.py scripts/summarize_compass_nmf_warm_start.py
+
+PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1 \
+  /home/sunyirong/miniforge3/envs/mgm-repro/bin/python -m pip check
+```
+
+- Smoke path passed on the existing 128-sample pilot dataset:
+  - NMF smoke dictionary: `(8,9665)`, finite, nonnegative, row sums near 1.
+  - Anchor bottleneck smoke: `A (128,8)`, `P_taxa (8,9665)`, reconstruction
+    `(128,9665)`, finite, and `dictionary_anchor_loss` written.
+- Full train-split-only NMF fit completed in `n_iter=70` without hitting
+  `max_iter=500`. The dictionary artifact has shape `(32,1000)`, finite
+  nonnegative values, row sums in `[0.9999987, 1.0000008]`, and manifest
+  `num_train_samples=210459`.
+- NMF oracle test metrics: Top-20 recall `0.5357`, Bray-Curtis `0.5266`,
+  cross-entropy `3.3005`. This is the traditional NMF-signature upper reference
+  for the fitted dictionary, not an MGM-readout result.
+- Full NMF warm-start bottleneck results:
+  - Parent `K32_balance005_entropy2_div002_thr025`: test Top-20 `0.5440`,
+    Bray-Curtis `0.4437`, dead fraction `0.1250`, dictionary p95 cosine
+    `0.1537`.
+  - `K32_nmf_fixed`: test Top-20 `0.5268`, Bray-Curtis `0.4603`, dead fraction
+    `0.1250`, effective programs `3.3424`, dictionary p95 cosine `0.0208`.
+    Final dictionary stayed fixed with max absolute drift `8.9e-6`.
+  - `K32_nmf_trainable`: test Top-20 `0.5342`, Bray-Curtis `0.4596`, dead
+    fraction `0.0938`, dictionary p95 cosine `0.0901`, mean KL drift from NMF
+    init `0.2275`.
+  - `K32_nmf_anchor005`: test Top-20 `0.5342`, Bray-Curtis `0.4596`, dead
+    fraction `0.1250`, dictionary p95 cosine `0.0712`, mean KL drift from NMF
+    init `0.1342`.
+- Wrote artifacts:
+  `runs/compass_biome/taxa_readout_validation_full260k_K32_nmf_warm_start_summary.csv`
+  and
+  `runs/compass_biome/taxa_readout_validation_full260k_K32_nmf_warm_start_recommendation.json`.
+- Interpretation: NMF warm start is not a strict positive under the planned
+  gate because no NMF mode beats the parent on both Top-20 and Bray-Curtis.
+  It is a useful tradeoff: Bray-Curtis and dictionary interpretability improve,
+  while parent K32 remains best for Top-20 recovery. The fixed NMF readout is
+  the cleanest NMF-signature probe of MGM embeddings; anchor005 is the better
+  trainable compromise if dictionary drift matters.
+
+## 2026-07-08 - ComPASS-Biome experiment ledger
+
+- Goal: create one curated Markdown ledger for completed ComPASS-Biome
+  validation experiments so key goals, expectations, numeric results, evidence
+  tables, and current judgments are not scattered across chronological notes
+  and raw run artifacts.
+- Created `docs/experiments.md` as the maintained result/analysis ledger. It
+  covers the full260K baseline, usage balancing, dictionary diversity,
+  regularized K sweep, and NMF warm start.
+- The ledger embeds compact numeric tables for quick reading and links back to
+  source artifacts under `runs/compass_biome/` for auditability. It does not
+  duplicate `.npz`, embeddings, checkpoints, or sample-level outputs.
+- Source artifacts summarized:
+  `taxa_readout_validation_full260k_usage_balance_summary.csv`,
+  `taxa_readout_validation_full260k_dictionary_diversity_summary.csv`,
+  `taxa_readout_validation_full260k_regularized_k_sweep_summary.csv`,
+  `taxa_readout_validation_full260k_regularized_k_recommendation.json`,
+  `taxa_readout_validation_full260k_K32_nmf_warm_start_summary.csv`, and
+  `taxa_readout_validation_full260k_K32_nmf_warm_start_recommendation.json`.
+- Current ledger judgment: primary setting is
+  `K32_balance005_entropy2_div002_thr025`; compact setting is regularized
+  `K16`; `K64` improves raw reconstruction but is rejected for
+  interpretability tradeoff; `K32_nmf_fixed` is the cleanest NMF-signature probe
+  but not the Top-20 recovery winner.

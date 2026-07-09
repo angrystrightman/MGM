@@ -458,8 +458,31 @@ def program_diagnostics_rows(
     if cosine.shape[0] > 1:
         offdiag = cosine[~np.eye(cosine.shape[0], dtype=bool)]
         cosine_mean = float(offdiag.mean())
+        cosine_max = float(offdiag.max())
+        cosine_p90 = float(np.quantile(offdiag, 0.90))
+        cosine_p95 = float(np.quantile(offdiag, 0.95))
     else:
         cosine_mean = 0.0
+        cosine_max = 0.0
+        cosine_p90 = 0.0
+        cosine_p95 = 0.0
+
+    top_k = min(20, taxa_programs.shape[1])
+    top_sets: list[set[int]] = []
+    for weights in taxa_programs:
+        order = np.argsort(-weights, kind="mergesort")[:top_k]
+        top_sets.append(set(int(idx) for idx in order))
+    overlaps: list[float] = []
+    jaccards: list[float] = []
+    for left_idx in range(len(top_sets)):
+        for right_idx in range(left_idx + 1, len(top_sets)):
+            intersection = len(top_sets[left_idx] & top_sets[right_idx])
+            union = len(top_sets[left_idx] | top_sets[right_idx])
+            overlaps.append(float(intersection))
+            jaccards.append(float(intersection / union) if union > 0 else 0.0)
+    top20_overlap_mean = float(np.mean(overlaps)) if overlaps else 0.0
+    top20_overlap_max = float(np.max(overlaps)) if overlaps else 0.0
+    top20_jaccard_mean = float(np.mean(jaccards)) if jaccards else 0.0
 
     rows: list[dict[str, object]] = [
         {"program": "all", "metric": "dead_program_fraction", "value": round(float((usage < dead_threshold).mean()), 6)},
@@ -467,6 +490,12 @@ def program_diagnostics_rows(
         {"program": "all", "metric": "activation_entropy_mean", "value": round(float(activation_entropy.mean()), 6)},
         {"program": "all", "metric": "dictionary_entropy_mean", "value": round(float(dictionary_entropy.mean()), 6)},
         {"program": "all", "metric": "dictionary_cosine_mean_offdiag", "value": round(cosine_mean, 6)},
+        {"program": "all", "metric": "dictionary_cosine_max_offdiag", "value": round(cosine_max, 6)},
+        {"program": "all", "metric": "dictionary_cosine_p90_offdiag", "value": round(cosine_p90, 6)},
+        {"program": "all", "metric": "dictionary_cosine_p95_offdiag", "value": round(cosine_p95, 6)},
+        {"program": "all", "metric": "dictionary_top20_overlap_mean", "value": round(top20_overlap_mean, 6)},
+        {"program": "all", "metric": "dictionary_top20_overlap_max", "value": round(top20_overlap_max, 6)},
+        {"program": "all", "metric": "dictionary_top20_jaccard_mean", "value": round(top20_jaccard_mean, 6)},
     ]
     for program_idx, value in enumerate(usage):
         rows.append(

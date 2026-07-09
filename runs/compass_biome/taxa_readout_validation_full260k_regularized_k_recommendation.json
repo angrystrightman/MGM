@@ -1,0 +1,19 @@
+{
+  "compact_k": 16,
+  "compact_run": "K16",
+  "criteria": {
+    "compact_reconstruction_fraction_of_reference": 0.8,
+    "control_gap_minimum": 0.1,
+    "k64_minimum_relative_gain": 0.02,
+    "primary_dead_program_fraction_max": 0.25,
+    "primary_dictionary_p95_cosine_max": 0.2,
+    "primary_reconstruction_fraction_of_reference": 0.9
+  },
+  "high_resolution_k": 32,
+  "prefer_k64_over_k32": false,
+  "primary_k": 32,
+  "primary_reason": "Smallest K meeting reconstruction, control-gap, usage, and dictionary gates.",
+  "primary_run": "K32",
+  "reference_run": "K32",
+  "rejected_runs": []
+}

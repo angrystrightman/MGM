@@ -59,6 +59,72 @@ def sample_entropy_target_loss(activations, target_effective_programs: float = 2
     return ((entropy - target_entropy) ** 2).mean()
 
 
+def dictionary_diversity_loss(
+    taxa_programs,
+    mode: str = "hinge_cosine",
+    threshold: float = 0.30,
+    eps: float = 1e-8,
+):
+    """Penalize redundant taxa dictionaries by their off-diagonal cosine similarity."""
+    import torch
+
+    if taxa_programs.ndim != 2:
+        raise ValueError("taxa_programs must be a 2D tensor")
+    if mode not in {"hinge_cosine", "mse_offdiag"}:
+        raise ValueError("mode must be one of: hinge_cosine, mse_offdiag")
+    if threshold < 0:
+        raise ValueError("threshold must be non-negative")
+    num_programs = taxa_programs.shape[0]
+    if num_programs <= 0:
+        raise ValueError("taxa_programs must contain at least one program")
+    if num_programs == 1:
+        return taxa_programs.sum() * 0.0
+
+    norms = taxa_programs.norm(p=2, dim=1, keepdim=True).clamp_min(eps)
+    normalized = taxa_programs / norms
+    cosine = normalized @ normalized.T
+    offdiag = cosine[~torch.eye(num_programs, dtype=torch.bool, device=taxa_programs.device)]
+    if mode == "mse_offdiag":
+        return (offdiag ** 2).mean()
+    return torch.relu(offdiag - threshold).pow(2).mean()
+
+
+def dictionary_anchor_loss(anchor_programs, taxa_programs, mode: str = "kl_anchor_to_current", eps: float = 1e-8):
+    """Penalize trainable taxa dictionaries for drifting away from an anchor."""
+    import torch
+
+    if anchor_programs.ndim != 2 or taxa_programs.ndim != 2:
+        raise ValueError("anchor_programs and taxa_programs must be 2D tensors")
+    if anchor_programs.shape != taxa_programs.shape:
+        raise ValueError("anchor_programs and taxa_programs must have the same shape")
+    if mode != "kl_anchor_to_current":
+        raise ValueError("mode must be kl_anchor_to_current")
+    return (
+        anchor_programs.clamp_min(eps)
+        * (torch.log(anchor_programs.clamp_min(eps)) - torch.log(taxa_programs.clamp_min(eps)))
+    ).sum(dim=1).mean()
+
+
+def _normalize_taxa_dictionary_init(
+    taxa_dictionary_init: np.ndarray,
+    num_programs: int,
+    num_taxa: int,
+) -> np.ndarray:
+    init = np.asarray(taxa_dictionary_init, dtype=np.float32)
+    if init.shape != (num_programs, num_taxa):
+        raise ValueError(
+            f"taxa_dictionary_init must have shape {(num_programs, num_taxa)}, got {init.shape}"
+        )
+    if not np.isfinite(init).all():
+        raise ValueError("taxa_dictionary_init must contain finite values")
+    if np.any(init < 0):
+        raise ValueError("taxa_dictionary_init must be non-negative")
+    row_sums = init.sum(axis=1, keepdims=True)
+    if np.any(row_sums <= 0):
+        raise ValueError("each taxa_dictionary_init row must have positive mass")
+    return (init / row_sums).astype(np.float32)
+
+
 def train_bottleneck_model(
     embeddings: np.ndarray,
     taxa_targets: np.ndarray,
@@ -76,6 +142,13 @@ def train_bottleneck_model(
     usage_balance_mode: str = "kl_uniform_to_usage",
     sample_entropy_weight: float = 0.0,
     sample_entropy_target_effective: float = 2.0,
+    dictionary_diversity_weight: float = 0.0,
+    dictionary_diversity_mode: str = "hinge_cosine",
+    dictionary_diversity_threshold: float = 0.30,
+    taxa_dictionary_init: np.ndarray | None = None,
+    freeze_taxa_dictionary: bool = False,
+    dictionary_anchor_weight: float = 0.0,
+    dictionary_anchor_mode: str = "kl_anchor_to_current",
 ) -> dict[str, Any]:
     """Train a soft program bottleneck that reconstructs taxa distributions."""
     import torch
@@ -103,6 +176,20 @@ def train_bottleneck_model(
         raise ValueError("sample_entropy_target_effective must be positive")
     if sample_entropy_target_effective > num_programs:
         raise ValueError("sample_entropy_target_effective cannot exceed num_programs")
+    if dictionary_diversity_weight < 0:
+        raise ValueError("dictionary_diversity_weight must be non-negative")
+    if dictionary_diversity_mode not in {"hinge_cosine", "mse_offdiag"}:
+        raise ValueError("dictionary_diversity_mode must be one of: hinge_cosine, mse_offdiag")
+    if dictionary_diversity_threshold < 0:
+        raise ValueError("dictionary_diversity_threshold must be non-negative")
+    if freeze_taxa_dictionary and taxa_dictionary_init is None:
+        raise ValueError("freeze_taxa_dictionary requires taxa_dictionary_init")
+    if dictionary_anchor_weight < 0:
+        raise ValueError("dictionary_anchor_weight must be non-negative")
+    if dictionary_anchor_weight > 0 and taxa_dictionary_init is None:
+        raise ValueError("dictionary_anchor_weight requires taxa_dictionary_init")
+    if dictionary_anchor_mode != "kl_anchor_to_current":
+        raise ValueError("dictionary_anchor_mode must be kl_anchor_to_current")
 
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
@@ -116,9 +203,22 @@ def train_bottleneck_model(
     train_target = train_target / train_target.sum(dim=1, keepdim=True).clamp_min(1e-12)
 
     encoder = nn.Linear(z.shape[1], num_programs, bias=True).to(device)
-    taxa_logits = nn.Parameter(torch.empty(num_programs, x.shape[1], device=device))
-    nn.init.normal_(taxa_logits, mean=0.0, std=0.02)
-    optimizer = torch.optim.Adam(list(encoder.parameters()) + [taxa_logits], lr=learning_rate)
+    anchor_programs = None
+    if taxa_dictionary_init is None:
+        taxa_logits = nn.Parameter(torch.empty(num_programs, x.shape[1], device=device))
+        nn.init.normal_(taxa_logits, mean=0.0, std=0.02)
+    else:
+        normalized_init = _normalize_taxa_dictionary_init(
+            taxa_dictionary_init,
+            num_programs=num_programs,
+            num_taxa=x.shape[1],
+        )
+        anchor_programs = torch.tensor(normalized_init, dtype=torch.float32, device=device)
+        taxa_logits = nn.Parameter(torch.log(anchor_programs.clamp_min(1e-8)), requires_grad=not freeze_taxa_dictionary)
+    optimizer_params = list(encoder.parameters())
+    if taxa_logits.requires_grad:
+        optimizer_params.append(taxa_logits)
+    optimizer = torch.optim.Adam(optimizer_params, lr=learning_rate)
 
     metrics: list[dict[str, float]] = []
     indices = np.arange(z.shape[0]) if train_indices is None else np.asarray(train_indices, dtype=np.int64)
@@ -136,6 +236,8 @@ def train_bottleneck_model(
         epoch_reconstruction_losses: list[float] = []
         epoch_usage_balance_losses: list[float] = []
         epoch_entropy_losses: list[float] = []
+        epoch_dictionary_diversity_losses: list[float] = []
+        epoch_dictionary_anchor_losses: list[float] = []
         epoch_sample_entropies: list[float] = []
         for start in range(0, len(indices), batch_size):
             batch_idx = torch.tensor(indices[start : start + batch_size], dtype=torch.long, device=device)
@@ -151,10 +253,22 @@ def train_bottleneck_model(
                 activations,
                 target_effective_programs=sample_entropy_target_effective,
             )
+            diversity_loss = dictionary_diversity_loss(
+                taxa_programs,
+                mode=dictionary_diversity_mode,
+                threshold=dictionary_diversity_threshold,
+            )
+            anchor_loss = (
+                dictionary_anchor_loss(anchor_programs, taxa_programs, mode=dictionary_anchor_mode)
+                if anchor_programs is not None
+                else taxa_programs.sum() * 0.0
+            )
             loss = (
                 reconstruction_loss
                 + usage_balance_weight * balance_loss
                 + sample_entropy_weight * entropy_target_loss
+                + dictionary_diversity_weight * diversity_loss
+                + dictionary_anchor_weight * anchor_loss
             )
 
             optimizer.zero_grad()
@@ -164,6 +278,8 @@ def train_bottleneck_model(
             epoch_reconstruction_losses.append(float(reconstruction_loss.detach().cpu()))
             epoch_usage_balance_losses.append(float(balance_loss.detach().cpu()))
             epoch_entropy_losses.append(float(entropy_target_loss.detach().cpu()))
+            epoch_dictionary_diversity_losses.append(float(diversity_loss.detach().cpu()))
+            epoch_dictionary_anchor_losses.append(float(anchor_loss.detach().cpu()))
             batch_entropy = -(activations * torch.log(activations.clamp_min(1e-8))).sum(dim=1).mean()
             epoch_sample_entropies.append(float(batch_entropy.detach().cpu()))
 
@@ -177,11 +293,23 @@ def train_bottleneck_model(
                 all_a,
                 target_effective_programs=sample_entropy_target_effective,
             )
+            full_dictionary_diversity_loss = dictionary_diversity_loss(
+                all_p,
+                mode=dictionary_diversity_mode,
+                threshold=dictionary_diversity_threshold,
+            )
+            full_dictionary_anchor_loss = (
+                dictionary_anchor_loss(anchor_programs, all_p, mode=dictionary_anchor_mode)
+                if anchor_programs is not None
+                else all_p.sum() * 0.0
+            )
             full_sample_entropy = -(all_a * torch.log(all_a.clamp_min(1e-8))).sum(dim=1).mean()
             objective_loss = (
                 reconstruction_objective_loss
                 + usage_balance_weight * full_balance_loss
                 + sample_entropy_weight * full_entropy_target_loss
+                + dictionary_diversity_weight * full_dictionary_diversity_loss
+                + dictionary_anchor_weight * full_dictionary_anchor_loss
             )
             true_loss = -(x * torch.log(all_recon.clamp_min(1e-8))).sum(dim=1).mean()
             train_idx_tensor = torch.tensor(indices, dtype=torch.long, device=device)
@@ -216,6 +344,10 @@ def train_bottleneck_model(
                 "sample_entropy_target_loss": float(full_entropy_target_loss.detach().cpu()),
                 "batch_sample_entropy_target_loss_mean": float(np.mean(epoch_entropy_losses)),
                 "batch_sample_entropy_mean": float(np.mean(epoch_sample_entropies)),
+                "dictionary_diversity_loss": float(full_dictionary_diversity_loss.detach().cpu()),
+                "batch_dictionary_diversity_loss_mean": float(np.mean(epoch_dictionary_diversity_losses)),
+                "dictionary_anchor_loss": float(full_dictionary_anchor_loss.detach().cpu()),
+                "batch_dictionary_anchor_loss_mean": float(np.mean(epoch_dictionary_anchor_losses)),
             }
         )
         if early_stop_score < best_score - 1e-7:
@@ -252,6 +384,15 @@ def train_bottleneck_model(
 def _load_npz_array(path: Path, key: str) -> np.ndarray:
     with np.load(path, allow_pickle=False) as data:
         return data[key]
+
+
+def _load_taxa_dictionary_init(path: Path | None) -> np.ndarray | None:
+    if path is None:
+        return None
+    with np.load(path, allow_pickle=False) as data:
+        if "taxa_programs" not in data.files:
+            raise ValueError("taxa dictionary init npz must contain taxa_programs")
+        return data["taxa_programs"].astype(np.float32)
 
 
 def _load_taxa_matrix(dataset_dir: Path) -> np.ndarray:
@@ -409,6 +550,13 @@ def run_pilot(
     usage_balance_mode: str = "kl_uniform_to_usage",
     sample_entropy_weight: float = 0.0,
     sample_entropy_target_effective: float = 2.0,
+    dictionary_diversity_weight: float = 0.0,
+    dictionary_diversity_mode: str = "hinge_cosine",
+    dictionary_diversity_threshold: float = 0.30,
+    taxa_dictionary_init_path: Path | None = None,
+    freeze_taxa_dictionary: bool = False,
+    dictionary_anchor_weight: float = 0.0,
+    dictionary_anchor_mode: str = "kl_anchor_to_current",
 ) -> dict[str, object]:
     sample_ids = pd.read_csv(dataset_dir / "sample_ids.csv")["sample_id"].astype(str).tolist()
     taxa_names = pd.read_csv(dataset_dir / "taxa_names.csv")["taxon"].astype(str).tolist()
@@ -432,6 +580,7 @@ def run_pilot(
     validation_indices = np.flatnonzero(np.asarray(splits) == "valid")
     if len(train_indices) == 0:
         raise ValueError("sample_splits.csv must contain at least one train sample")
+    taxa_dictionary_init = _load_taxa_dictionary_init(taxa_dictionary_init_path)
 
     result = train_bottleneck_model(
         embeddings=z,
@@ -449,6 +598,13 @@ def run_pilot(
         usage_balance_mode=usage_balance_mode,
         sample_entropy_weight=sample_entropy_weight,
         sample_entropy_target_effective=sample_entropy_target_effective,
+        dictionary_diversity_weight=dictionary_diversity_weight,
+        dictionary_diversity_mode=dictionary_diversity_mode,
+        dictionary_diversity_threshold=dictionary_diversity_threshold,
+        taxa_dictionary_init=taxa_dictionary_init,
+        freeze_taxa_dictionary=freeze_taxa_dictionary,
+        dictionary_anchor_weight=dictionary_anchor_weight,
+        dictionary_anchor_mode=dictionary_anchor_mode,
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -508,6 +664,13 @@ def run_pilot(
             usage_balance_mode=usage_balance_mode,
             sample_entropy_weight=sample_entropy_weight,
             sample_entropy_target_effective=sample_entropy_target_effective,
+            dictionary_diversity_weight=dictionary_diversity_weight,
+            dictionary_diversity_mode=dictionary_diversity_mode,
+            dictionary_diversity_threshold=dictionary_diversity_threshold,
+            taxa_dictionary_init=taxa_dictionary_init,
+            freeze_taxa_dictionary=freeze_taxa_dictionary,
+            dictionary_anchor_weight=dictionary_anchor_weight,
+            dictionary_anchor_mode=dictionary_anchor_mode,
         )
         metric_rows.extend(
             reconstruction_metric_rows(
@@ -579,6 +742,13 @@ def run_pilot(
         "usage_balance_loss": usage_balance_mode,
         "sample_entropy_weight": sample_entropy_weight,
         "sample_entropy_target_effective": sample_entropy_target_effective,
+        "dictionary_diversity_weight": dictionary_diversity_weight,
+        "dictionary_diversity_loss_type": dictionary_diversity_mode,
+        "dictionary_diversity_threshold": dictionary_diversity_threshold,
+        "taxa_dictionary_init": str(taxa_dictionary_init_path) if taxa_dictionary_init_path is not None else None,
+        "freeze_taxa_dictionary": freeze_taxa_dictionary,
+        "dictionary_anchor_weight": dictionary_anchor_weight,
+        "dictionary_anchor_loss": dictionary_anchor_mode,
         "final_loss": result["metrics"][-1]["loss"],
         "split_counts": pd.Series(splits).value_counts().sort_index().to_dict(),
         "outputs": {
@@ -621,6 +791,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--sample-entropy-weight", type=float, default=0.0)
     parser.add_argument("--sample-entropy-target-effective", type=float, default=2.0)
+    parser.add_argument("--dictionary-diversity-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--dictionary-diversity-loss",
+        choices=["hinge_cosine", "mse_offdiag"],
+        default="hinge_cosine",
+    )
+    parser.add_argument("--dictionary-diversity-threshold", type=float, default=0.30)
+    parser.add_argument("--taxa-dictionary-init", type=Path, default=None)
+    parser.add_argument("--freeze-taxa-dictionary", action="store_true")
+    parser.add_argument("--dictionary-anchor-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--dictionary-anchor-loss",
+        choices=["kl_anchor_to_current"],
+        default="kl_anchor_to_current",
+    )
     parser.add_argument("--no-plots", action="store_true")
     return parser
 
@@ -646,6 +831,13 @@ def main(argv: list[str] | None = None) -> int:
         usage_balance_mode=args.usage_balance_loss,
         sample_entropy_weight=args.sample_entropy_weight,
         sample_entropy_target_effective=args.sample_entropy_target_effective,
+        dictionary_diversity_weight=args.dictionary_diversity_weight,
+        dictionary_diversity_mode=args.dictionary_diversity_loss,
+        dictionary_diversity_threshold=args.dictionary_diversity_threshold,
+        taxa_dictionary_init_path=args.taxa_dictionary_init,
+        freeze_taxa_dictionary=args.freeze_taxa_dictionary,
+        dictionary_anchor_weight=args.dictionary_anchor_weight,
+        dictionary_anchor_mode=args.dictionary_anchor_loss,
     )
     print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0

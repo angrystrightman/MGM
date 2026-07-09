@@ -66,6 +66,34 @@ is safe only after the run completes, for read-only comparison of manifests,
 metrics, diagnostics, and plots across baseline, compact, and regularized
 outputs.
 
+For dictionary-diversity bottleneck experiments, keep each full260K run
+serialized even when output directories differ. The diversity-only and
+balanced-plus-diversity commands both train real and shuffle models on the same
+GPU-scale artifacts, and concurrent runs would make OOM, NaN, or disk-pressure
+failures harder to attribute. After runs finish, read-only recomputation of
+diagnostics and summary CSV generation from completed outputs is safe.
+
+For regularized K-resolution sweeps, run each K serially on the GPU even though
+each K writes to a separate output directory. The sweep is meant to compare
+program resolution under identical resource and regularization settings, so
+parallel GPU contention would make runtime failures and early-stopping behavior
+harder to interpret. After all K runs finish, summary/recommendation generation
+and read-only review of program reports can be parallelized.
+
+For NMF warm-start experiments, keep train-split-only NMF fitting as a single
+coordinated CPU job per dataset/K, then run each full260K bottleneck mode
+serially on the GPU. The fixed, trainable, and anchor modes all consume the
+same full dataset, embeddings, and NMF dictionary, so concurrent training would
+make OOM, NaN, or disk-pressure failures harder to attribute. Once all modes
+finish, read-only summary generation and review of dictionary drift,
+reconstruction metrics, and top-taxa/biome reports can be parallelized.
+
+For the curated experiment ledger at `docs/experiments.md`, read-only metric
+extraction from immutable CSV/JSON artifacts can be parallelized. Edits to the
+ledger itself should stay serialized through one coordinating agent, because it
+is the canonical human-facing interpretation layer and must keep goals,
+evidence tables, artifact links, and judgments internally consistent.
+
 ## Loop Discipline
 
 Each execution loop should:

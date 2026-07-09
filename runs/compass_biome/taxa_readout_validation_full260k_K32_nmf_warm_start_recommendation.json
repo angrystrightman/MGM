@@ -1,0 +1,18 @@
+{
+  "fixed_interpretability_positive": true,
+  "notes": [
+    "Positive requires beating the parent on both Top-20 recall and Bray-Curtis.",
+    "Tradeoff can still be useful when Bray-Curtis and dictionary interpretability improve while Top-20 recall falls."
+  ],
+  "parent_run": "K32_parent",
+  "parent_test_bray_curtis": 0.443749,
+  "parent_test_top20_recall": 0.543964,
+  "reason": "No NMF mode beat the parent on both Top-20 recall and Bray-Curtis; best mode improves one axis.",
+  "recommended_dead_program_fraction": 0.125,
+  "recommended_dictionary_cosine_p95_offdiag": 0.020782,
+  "recommended_mode": "nmf_fixed",
+  "recommended_run": "K32_nmf_fixed",
+  "recommended_test_bray_curtis": 0.460289,
+  "recommended_test_top20_recall": 0.5268,
+  "verdict": "tradeoff"
+}

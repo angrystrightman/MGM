@@ -405,9 +405,52 @@ Latest validation on 2026-07-07:
   0.1563, effective programs per sample rose to 2.1754, and dictionary
   off-diagonal cosine dropped to 0.0289. Because the primary run passed the
   positive gate, the stronger `balance010` follow-up was not run.
+- Full260K dictionary-diversity runs added optional hinge-cosine diversity on
+  `P_taxa` while keeping the same data, embeddings, controls, and optimizer
+  scale. Diversity-only `K32_div005_thr030` isolated the expected dictionary
+  effect: real test Top-20 recall 0.4560 and Bray-Curtis 0.3278, dictionary
+  off-diagonal cosine mean 0.1363, max 0.3253, p90 0.2651, p95 0.2896, and
+  top-20 overlap mean 1.4335, but usage collapse remained
+  `dead_program_fraction=0.75`. Balanced plus weak diversity
+  `K32_balance005_entropy2_div002_thr025` reached the best current combination:
+  real test Top-20 recall 0.5440 and Bray-Curtis 0.4437, with
+  `dead_program_fraction=0.1250`, effective programs 2.2293, dictionary cosine
+  mean 0.0293, max 0.4206, p90 0.0893, p95 0.1537, and top-20 overlap mean
+  0.9617. The comparison artifact is
+  `runs/compass_biome/taxa_readout_validation_full260k_dictionary_diversity_summary.csv`.
+- Full260K regularized K-resolution sweep reused the same full260K dataset,
+  frozen MGM embeddings, Top1000 taxa target, and balanced+weak-diversity
+  objective. New runs were `K=4,8,16,64`, with the existing
+  `K32_balance005_entropy2_div002_thr025` as the anchor. Test reconstruction
+  improved monotonically with K: `K4` Top-20/Bray `0.3990/0.2712`, `K8`
+  `0.4549/0.3179`, `K16` `0.4884/0.3786`, `K32` `0.5440/0.4437`, and `K64`
+  `0.5783/0.4933`. Usage/redundancy tradeoff favored K32 over K64:
+  `K64` had `dead_program_fraction=0.4531` and dictionary p95 cosine `0.2396`,
+  versus K32 `0.1250` and `0.1537`. The recommendation artifact selects
+  primary `K=32`, compact `K=16`, and does not prefer K64 over K32. Outputs:
+  `runs/compass_biome/taxa_readout_validation_full260k_regularized_k_sweep_summary.csv`,
+  `runs/compass_biome/taxa_readout_validation_full260k_regularized_k_program_report.csv`,
+  and
+  `runs/compass_biome/taxa_readout_validation_full260k_regularized_k_recommendation.json`.
+- Full260K NMF warm-start validation reused the primary K32 objective and fit a
+  train-split-only NMF dictionary (`K=32`, `Top1000 taxa`) from the full dataset.
+  The NMF fit used only the 210,459 train samples and converged in 70
+  iterations. NMF oracle test metrics were Top-20/Bray `0.5357/0.5266`.
+  Bottleneck results showed a tradeoff rather than a strict win over the parent:
+  parent K32 balanced+weak-diversity reached `0.5440/0.4437`; NMF fixed reached
+  `0.5268/0.4603` with very clean dictionary diagnostics and no dictionary
+  drift; NMF trainable reached `0.5342/0.4596`; NMF anchor005 reached
+  `0.5342/0.4596` with lower drift than trainable. Summary outputs:
+  `runs/compass_biome/taxa_readout_validation_full260k_K32_nmf_warm_start_summary.csv`
+  and
+  `runs/compass_biome/taxa_readout_validation_full260k_K32_nmf_warm_start_recommendation.json`.
 - Interpretation: the taxa readout sanity check is strongly positive for MGM
-  embedding carrying taxa-composition signal, and the anti-collapse objective is
-  the best current bottleneck setting for both reconstruction and program usage
-  balance. This is still an architecture-level sanity check rather than a
-  biological mechanism claim; next work should inspect program taxa/biome
-  coherence and test stability before moving to disease/pathway cohorts.
+  embedding carrying taxa-composition signal, and the best current bottleneck
+  setting is balanced `K=32` plus weak dictionary diversity. `K=16` is the
+  compact alternative when fewer programs are more important than peak
+  reconstruction. NMF warm start is useful as an interpretable dictionary probe
+  and Bray-Curtis-oriented tradeoff, but it does not replace the parent K32
+  setting for Top-20 taxa recovery. This is still an architecture-level sanity
+  check rather than a biological mechanism claim; next work should inspect
+  program taxa/biome coherence and test stability before moving to
+  disease/pathway cohorts.
